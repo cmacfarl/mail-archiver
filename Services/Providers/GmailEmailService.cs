@@ -218,6 +218,17 @@ namespace MailArchiver.Services.Providers
                 }
             }
 
+            // Update the account-level LastSync so the UI reflects when the last sync ran
+            if (totalFailed == 0)
+            {
+                var freshAccount = await _context.MailAccounts.FindAsync(account.Id);
+                if (freshAccount != null)
+                {
+                    freshAccount.LastSync = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             if (jobId != null)
                 _syncJobService.CompleteJob(jobId, totalFailed == 0);
 
