@@ -52,6 +52,13 @@ namespace MailArchiver.Models.ViewModels
         [Display(Name = "Tenant ID")]
         [ConditionalRequired(nameof(Provider), ProviderType.M365, ErrorMessage = "Tenant ID is required for M365 accounts")]
         public string TenantId { get; set; }
+
+        [Display(Name = "Credentials File")]
+        [ConditionalRequired(nameof(Provider), ProviderType.Gmail, ErrorMessage = "Credentials file path is required for Gmail accounts")]
+        public string? GmailCredentialsFile { get; set; }
+
+        [Display(Name = "Token Store Name")]
+        public string? GmailTokenStoreName { get; set; }
         
         [Display(Name = "Delete After Days")]
         [Range(1, int.MaxValue, ErrorMessage = "Delete after days must be at least 1")]

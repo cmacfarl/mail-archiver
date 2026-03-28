@@ -31,7 +31,11 @@ public class MailAccount
     public string? ClientId { get; set; }
     public string? ClientSecret { get; set; }
     public string? TenantId { get; set; }
-    
+
+    // Gmail OAuth2 fields
+    public string? GmailCredentialsFile { get; set; }
+    public string? GmailTokenStoreName { get; set; }
+
     [NotMapped]
     public List<string> ExcludedFoldersList
     {
@@ -44,7 +48,9 @@ public class MailAccount
     }
     
     public virtual ICollection<ArchivedEmail> ArchivedEmails { get; set; } = new List<ArchivedEmail>();
-    
+
+    public virtual ICollection<GmailSenderFilter> GmailSenderFilters { get; set; } = new List<GmailSenderFilter>();
+
     // Navigation properties for multi-user functionality
     public virtual ICollection<UserMailAccount> UserMailAccounts { get; set; } = new List<UserMailAccount>();
 }

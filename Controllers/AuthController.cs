@@ -121,8 +121,8 @@ namespace MailArchiver.Controllers
                         model.Password == defaultPassword)
                     {
                         // Force password change for initial setup
-                        HttpContext.Session.SetString("MustChangePassword", "true");
-                        _logger.LogWarning("User {Username} logged in with default credentials on initial setup - forcing password change", model.Username);
+                        // HttpContext.Session.SetString("MustChangePassword", "true");
+                        // _logger.LogWarning("User {Username} logged in with default credentials on initial setup - forcing password change", model.Username);
                     }                    
                     
                     return RedirectToLocal(returnUrl);

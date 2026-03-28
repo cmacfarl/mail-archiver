@@ -83,6 +83,12 @@ namespace MailArchiver.Migrations
                     b.Property<string>("Username")
                         .HasColumnType("text");
 
+                    b.Property<string>("GmailCredentialsFile")
+                        .HasColumnType("text");
+
+                    b.Property<string>("GmailTokenStoreName")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.ToTable("MailAccounts", "mail_archiver");
@@ -358,6 +364,41 @@ namespace MailArchiver.Migrations
                     b.ToTable("UserMailAccounts", "mail_archiver");
                 });
 
+            modelBuilder.Entity("MailArchiver.Models.GmailSenderFilter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("MailAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EmailAddress")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FilterType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("LastSync")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MailAccountId", "EmailAddress", "FilterType")
+                        .IsUnique()
+                        .HasDatabaseName("IX_GmailSenderFilters_AccountId_Email_Type");
+
+                    b.ToTable("GmailSenderFilters", "mail_archiver");
+                });
+
             modelBuilder.Entity("MailArchiver.Models.ArchivedEmail", b =>
                 {
                     b.HasOne("MailAccount", "MailAccount")
@@ -399,9 +440,22 @@ namespace MailArchiver.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("MailArchiver.Models.GmailSenderFilter", b =>
+                {
+                    b.HasOne("MailAccount", "MailAccount")
+                        .WithMany("GmailSenderFilters")
+                        .HasForeignKey("MailAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MailAccount");
+                });
+
             modelBuilder.Entity("MailAccount", b =>
                 {
                     b.Navigation("ArchivedEmails");
+
+                    b.Navigation("GmailSenderFilters");
 
                     b.Navigation("UserMailAccounts");
                 });

@@ -102,11 +102,10 @@ body {
   border-radius: 8px;
   margin-bottom: 1.5rem;
   overflow: hidden;
-  transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+  transition: box-shadow var(--transition-speed);
 }
 
 .card:hover {
-  transform: translateY(-3px);
   box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
 }
 
@@ -325,7 +324,6 @@ body {
 }
 
 .stat-card:hover {
-  transform: translateY(-5px);
 }
 
 .display-4 {

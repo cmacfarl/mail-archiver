@@ -346,6 +346,7 @@ builder.Services.AddScoped<IAccessLogService, AccessLogService>();
 builder.Services.AddScoped<MailArchiver.Services.Core.EmailCoreService>();
 builder.Services.AddScoped<MailArchiver.Services.Providers.ImapEmailService>();
 builder.Services.AddScoped<MailArchiver.Services.Providers.ImportEmailService>();
+builder.Services.AddScoped<MailArchiver.Services.Providers.GmailEmailService>();
 builder.Services.AddScoped<MailArchiver.Services.Factories.ProviderEmailServiceFactory>();
 
 // Add Localization

@@ -26,6 +26,7 @@
                     <select asp-for="Provider" class="form-select">
                         <option value="@ProviderType.IMAP">IMAP</option>
                         <option value="@ProviderType.M365">Microsoft 365</option>
+                        <option value="@ProviderType.Gmail">Gmail</option>
                         <option value="@ProviderType.IMPORT">Import Only</option>
                     </select>
                     <span asp-validation-for="Provider" class="text-danger"></span>
@@ -101,44 +102,134 @@
                     </div>
                 </div>
                 
+                <div id="gmailSettings" style="display: none;">
+                    <h4 class="mt-4">Gmail Settings</h4>
+                    <div class="mb-3">
+                        <label asp-for="GmailCredentialsFile" class="form-label">Credentials File Path</label>
+                        <input asp-for="GmailCredentialsFile" class="form-control" placeholder="/path/to/credentials.json" />
+                        <div class="form-text">Path to the OAuth2 credentials JSON file downloaded from Google Cloud Console.</div>
+                        <span asp-validation-for="GmailCredentialsFile" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="GmailTokenStoreName" class="form-label">Token Store Name</label>
+                        <input asp-for="GmailTokenStoreName" class="form-control" placeholder="gmail_token_myaccount" />
+                        <div class="form-text">Name for the OAuth2 token store directory. Defaults to <code>gmail_token_{email}</code> if left blank. Each account should use a unique name.</div>
+                        <span asp-validation-for="GmailTokenStoreName" class="text-danger"></span>
+                    </div>
+
+                    <h4 class="mt-4">Sender Filters</h4>
+                    <p class="text-muted">Only email from these senders will be archived. Each sender tracks its own sync timestamp independently.</p>
+
+                    @if (Model.GmailSenderFilters.Any())
+                    {
+                        <table class="table table-sm" id="senderFiltersTable">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Email</th>
+                                    <th>Last Sync</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var filter in Model.GmailSenderFilters)
+                                {
+                                    <tr id="sender-row-@filter.Id">
+                                        <td>
+                                            <span class="badge @(filter.FilterType == GmailFilterType.Sender ? "bg-primary" : "bg-info text-dark")">
+                                                @filter.FilterType
+                                            </span>
+                                        </td>
+                                        <td>@filter.EmailAddress</td>
+                                        <td>
+                                            @if (filter.LastSync.HasValue)
+                                            {
+                                                @filter.LastSync.Value.ToString("yyyy-MM-dd HH:mm")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Never synced</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span id="status-@filter.Id" class="badge @(filter.IsEnabled ? "bg-success" : "bg-secondary")">
+                                                @(filter.IsEnabled ? "Enabled" : "Disabled")
+                                            </span>
+                                        </td>
+                                        <td class="text-end">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                    onclick="toggleSender(@filter.Id, @Model.Id)">
+                                                @(filter.IsEnabled ? "Disable" : "Enable")
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger ms-1"
+                                                    onclick="removeSender(@filter.Id, @Model.Id)">
+                                                Remove
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <p class="text-muted" id="noSendersMsg">No filters configured yet.</p>
+                    }
+
+                    <div class="d-flex gap-2 mt-2" style="max-width: 600px;">
+                        <select id="newFilterType" class="form-select" style="max-width: 130px;">
+                            <option value="0">Sender</option>
+                            <option value="1">Recipient</option>
+                        </select>
+                        <input type="email" id="newSenderEmail" class="form-control" placeholder="address@example.com" />
+                        <button type="button" class="btn btn-outline-primary text-nowrap" onclick="addSender(@Model.Id)">
+                            Add Filter
+                        </button>
+                    </div>
+                    <div id="senderError" class="text-danger mt-1" style="display:none;"></div>
+                </div>
+
                 <div id="emailDeletionSettings" style="display: none;">
                     <div class="mb-3 form-check">
                         <input asp-for="IsEnabled" class="form-check-input" />
                         <label asp-for="IsEnabled" class="form-check-label">@Localizer["AccountEnabled"]</label>
                         <div class="form-text">@Localizer["DisabledAccountsNotSynced"]</div>
                     </div>
-                    
-                    <h4 class="mt-4">@Localizer["FolderExclusion"]</h4>
-                    <div class="mb-3">
-                        <label asp-for="ExcludedFolders" class="form-label">@Localizer["ExcludedFolders"]</label>
-                        <textarea asp-for="ExcludedFolders" class="form-control" rows="3" placeholder="@Localizer["EnterFolderNames"]"></textarea>
-                        <div class="form-text">@Localizer["EnterFolderNamesText"]</div>
-                        <span asp-validation-for="ExcludedFolders" class="text-danger"></span>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">@Localizer["AvailableFolders"]</label>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="loadFoldersBtn">
-                            <i class="bi bi-folder"></i> @Localizer["LoadAvailableFolders"]
-                        </button>
-                        <div id="foldersContainer" style="display: none;" class="mt-2">
-                            <div class="card">
-                                <div class="card-body">
-                                    <div id="foldersContent" class="d-flex flex-wrap gap-2">
-                                        <!-- Folders will be loaded here -->
+
+                    <div id="folderExclusionSettings">
+                        <h4 class="mt-4">@Localizer["FolderExclusion"]</h4>
+                        <div class="mb-3">
+                            <label asp-for="ExcludedFolders" class="form-label">@Localizer["ExcludedFolders"]</label>
+                            <textarea asp-for="ExcludedFolders" class="form-control" rows="3" placeholder="@Localizer["EnterFolderNames"]"></textarea>
+                            <div class="form-text">@Localizer["EnterFolderNamesText"]</div>
+                            <span asp-validation-for="ExcludedFolders" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">@Localizer["AvailableFolders"]</label>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="loadFoldersBtn">
+                                <i class="bi bi-folder"></i> @Localizer["LoadAvailableFolders"]
+                            </button>
+                            <div id="foldersContainer" style="display: none;" class="mt-2">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div id="foldersContent" class="d-flex flex-wrap gap-2">
+                                            <!-- Folders will be loaded here -->
+                                        </div>
                                     </div>
                                 </div>
+                                <div class="form-text">@Localizer["FoldersOnServer"]</div>
                             </div>
-                            <div class="form-text">@Localizer["FoldersOnServer"]</div>
-                        </div>
-                        <div id="foldersLoading" style="display: none;" class="mt-2">
-                            <div class="spinner-border spinner-border-sm" role="status">
-                                <span class="visually-hidden">Loading...</span>
+                            <div id="foldersLoading" style="display: none;" class="mt-2">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                @Localizer["LoadingFolders"]
                             </div>
-                            @Localizer["LoadingFolders"]
-                        </div>
-                        <div id="foldersError" style="display: none;" class="mt-2 alert alert-warning">
-                            @Localizer["CouldNotLoadFolders"]
+                            <div id="foldersError" style="display: none;" class="mt-2 alert alert-warning">
+                                @Localizer["CouldNotLoadFolders"]
+                            </div>
                         </div>
                     </div>
                     
@@ -178,7 +269,9 @@
             const providerSelect = document.getElementById('Provider');
             const imapSettings = document.getElementById('imapSettings');
             const microsoft365Settings = document.getElementById('microsoft365Settings');
+            const gmailSettings = document.getElementById('gmailSettings');
             const emailDeletionSettings = document.getElementById('emailDeletionSettings');
+            const folderExclusionSettings = document.getElementById('folderExclusionSettings');
             const loadFoldersBtn = document.getElementById('loadFoldersBtn');
             const foldersContainer = document.getElementById('foldersContainer');
             const foldersContent = document.getElementById('foldersContent');
@@ -191,29 +284,40 @@
             const affectedAccountsUl = document.getElementById('affectedAccountsUl');
             const applyToAllCheckbox = document.getElementById('applyToAllDomainAccounts');
             const editForm = document.querySelector('form');
-            
+
             console.log('Edit form found:', editForm);
             console.log('Apply checkbox found:', applyToAllCheckbox);
-            
+
             let originalClientId = '@Model.ClientId';
             let originalTenantId = '@Model.TenantId';
             let affectedAccounts = [];
             let bulkUpdateRequested = false;
-            
+
             function toggleSettings() {
                 const providerValue = providerSelect.value;
                 if (providerValue === '@ProviderType.IMPORT') {
                     imapSettings.style.display = 'none';
                     microsoft365Settings.style.display = 'none';
+                    gmailSettings.style.display = 'none';
                     emailDeletionSettings.style.display = 'none';
                 } else if (providerValue === '@ProviderType.M365') {
                     imapSettings.style.display = 'none';
                     microsoft365Settings.style.display = 'block';
+                    gmailSettings.style.display = 'none';
                     emailDeletionSettings.style.display = 'block';
+                    folderExclusionSettings.style.display = 'block';
+                } else if (providerValue === '@ProviderType.Gmail') {
+                    imapSettings.style.display = 'none';
+                    microsoft365Settings.style.display = 'none';
+                    gmailSettings.style.display = 'block';
+                    emailDeletionSettings.style.display = 'block';
+                    folderExclusionSettings.style.display = 'none';
                 } else {
                     imapSettings.style.display = 'block';
                     microsoft365Settings.style.display = 'none';
+                    gmailSettings.style.display = 'none';
                     emailDeletionSettings.style.display = 'block';
+                    folderExclusionSettings.style.display = 'block';
                 }
             }
             
@@ -446,6 +550,91 @@
                 });
             }
         });
+    </script>
+    <script>
+        const antiForgeryToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+        async function addSender(accountId) {
+            const input = document.getElementById('newSenderEmail');
+            const filterTypeSelect = document.getElementById('newFilterType');
+            const errorEl = document.getElementById('senderError');
+            const email = input.value.trim();
+
+            if (!email) return;
+
+            errorEl.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('accountId', accountId);
+            formData.append('emailAddress', email);
+            formData.append('filterType', filterTypeSelect.value);
+            formData.append('__RequestVerificationToken', antiForgeryToken);
+
+            const response = await fetch('@Url.Action("AddGmailSender", "MailAccounts")', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                input.value = '';
+                // Reload to show updated table with correct IDs
+                location.reload();
+            } else {
+                errorEl.textContent = data.message;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        async function removeSender(filterId, accountId) {
+            if (!confirm('Remove this sender filter?')) return;
+
+            const formData = new FormData();
+            formData.append('filterId', filterId);
+            formData.append('accountId', accountId);
+            formData.append('__RequestVerificationToken', antiForgeryToken);
+
+            const response = await fetch('@Url.Action("RemoveGmailSender", "MailAccounts")', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('sender-row-' + filterId).remove();
+            } else {
+                alert(data.message);
+            }
+        }
+
+        async function toggleSender(filterId, accountId) {
+            const formData = new FormData();
+            formData.append('filterId', filterId);
+            formData.append('accountId', accountId);
+            formData.append('__RequestVerificationToken', antiForgeryToken);
+
+            const response = await fetch('@Url.Action("ToggleGmailSender", "MailAccounts")', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                const badge = document.getElementById('status-' + filterId);
+                const btn = badge.closest('tr').querySelector('button[onclick^="toggleSender"]');
+                if (data.isEnabled) {
+                    badge.className = 'badge bg-success';
+                    badge.textContent = 'Enabled';
+                    btn.textContent = 'Disable';
+                } else {
+                    badge.className = 'badge bg-secondary';
+                    badge.textContent = 'Disabled';
+                    btn.textContent = 'Enable';
+                }
+            } else {
+                alert(data.message);
+            }
+        }
     </script>
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
 }

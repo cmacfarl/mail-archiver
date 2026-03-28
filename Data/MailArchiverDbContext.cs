@@ -11,6 +11,7 @@ namespace MailArchiver.Data
         public DbSet<User> Users { get; set; }
         public DbSet<UserMailAccount> UserMailAccounts { get; set; }
         public DbSet<AccessLog> AccessLogs { get; set; }
+        public DbSet<GmailSenderFilter> GmailSenderFilters { get; set; }
 
         public MailArchiverDbContext(DbContextOptions<MailArchiverDbContext> options)
             : base(options)
@@ -157,6 +158,27 @@ namespace MailArchiver.Data
                 .Property(e => e.Provider)
                 .HasConversion<string>()
                 .HasMaxLength(10);
+
+            // GmailSenderFilter entity configuration
+            modelBuilder.Entity<GmailSenderFilter>()
+                .HasOne(f => f.MailAccount)
+                .WithMany(a => a.GmailSenderFilters)
+                .HasForeignKey(f => f.MailAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GmailSenderFilter>()
+                .Property(f => f.EmailAddress)
+                .HasColumnType("text");
+
+            modelBuilder.Entity<GmailSenderFilter>()
+                .Property(f => f.FilterType)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<GmailSenderFilter>()
+                .HasIndex(f => new { f.MailAccountId, f.EmailAddress, f.FilterType })
+                .IsUnique()
+                .HasDatabaseName("IX_GmailSenderFilters_AccountId_Email_Type");
                 
             // AccessLog entity configuration
             modelBuilder.Entity<AccessLog>()

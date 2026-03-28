@@ -61,7 +61,17 @@ namespace MailArchiver.Models.ViewModels
         [Display(Name = "Tenant ID")]
         [ConditionalRequired(nameof(Provider), ProviderType.M365, ErrorMessage = "Tenant ID is required for M365 accounts")]
         public string? TenantId { get; set; }
-        
+
+        [Display(Name = "Credentials File")]
+        [ConditionalRequired(nameof(Provider), ProviderType.Gmail, ErrorMessage = "Credentials file path is required for Gmail accounts")]
+        public string? GmailCredentialsFile { get; set; }
+
+        [Display(Name = "Token Store Name")]
+        public string? GmailTokenStoreName { get; set; }
+
+        // Gmail sender filters — populated in Edit GET, not bound on POST (managed via separate actions)
+        public List<GmailSenderFilter> GmailSenderFilters { get; set; } = new();
+
         // For UI display of available folders
         public List<string> AvailableFolders { get; set; } = new List<string>();
 

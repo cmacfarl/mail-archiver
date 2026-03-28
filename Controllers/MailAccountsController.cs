@@ -222,6 +222,8 @@ var model = new MailAccountViewModel
                     ClientId = model.Provider == ProviderType.M365 ? model.ClientId : null,
                     ClientSecret = model.Provider == ProviderType.M365 ? model.ClientSecret : null,
                     TenantId = model.Provider == ProviderType.M365 ? model.TenantId : null,
+                    GmailCredentialsFile = model.Provider == ProviderType.Gmail ? model.GmailCredentialsFile : null,
+                    GmailTokenStoreName = model.Provider == ProviderType.Gmail ? model.GmailTokenStoreName : null,
                     ExcludedFolders = string.Empty,
                     DeleteAfterDays = model.DeleteAfterDays,
                     LocalRetentionDays = model.LocalRetentionDays,
@@ -324,6 +326,12 @@ var model = new MailAccountViewModel
                 return NotFound();
             }
 
+            var senderFilters = await _context.GmailSenderFilters
+                .Where(f => f.MailAccountId == id)
+                .OrderBy(f => f.FilterType)
+                .ThenBy(f => f.EmailAddress)
+                .ToListAsync();
+
             var model = new MailAccountViewModel
             {
                 Id = account.Id,
@@ -341,14 +349,14 @@ var model = new MailAccountViewModel
                 Provider = account.Provider,
                 ClientId = account.ClientId,
                 ClientSecret = account.ClientSecret,
-                TenantId = account.TenantId
+                TenantId = account.TenantId,
+                GmailCredentialsFile = account.GmailCredentialsFile,
+                GmailTokenStoreName = account.GmailTokenStoreName,
+                GmailSenderFilters = senderFilters
             };
 
             // Set ViewBag properties
             ViewBag.Provider = account.Provider;
-            
-            // Note: Folders are now loaded on-demand via AJAX to improve page load performance
-            // The GetFolders endpoint handles folder loading when the user clicks the "Load Folders" button
 
             return View(model);
         }
@@ -451,6 +459,10 @@ var model = new MailAccountViewModel
                     }
                     
                     account.TenantId = model.Provider == ProviderType.M365 ? model.TenantId : null;
+
+                    // Gmail fields
+                    account.GmailCredentialsFile = model.Provider == ProviderType.Gmail ? model.GmailCredentialsFile : null;
+                    account.GmailTokenStoreName = model.Provider == ProviderType.Gmail ? model.GmailTokenStoreName : null;
 
                     // Only update password if provided
                     if (!string.IsNullOrEmpty(model.Password))
@@ -586,6 +598,80 @@ var model = new MailAccountViewModel
                 }
             }
             return View(model);
+        }
+
+        // POST: MailAccounts/AddGmailSender
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddGmailSender(int accountId, string emailAddress, GmailFilterType filterType)
+        {
+            if (!await HasAccessToAccountAsync(accountId))
+                return Json(new { success = false, message = "Access denied" });
+
+            if (string.IsNullOrWhiteSpace(emailAddress) || !emailAddress.Contains('@'))
+                return Json(new { success = false, message = "Invalid email address" });
+
+            emailAddress = emailAddress.Trim().ToLowerInvariant();
+
+            var existing = await _context.GmailSenderFilters
+                .FirstOrDefaultAsync(f => f.MailAccountId == accountId
+                    && f.EmailAddress == emailAddress
+                    && f.FilterType == filterType);
+
+            if (existing != null)
+                return Json(new { success = false, message = $"{filterType} filter for {emailAddress} already exists" });
+
+            _context.GmailSenderFilters.Add(new GmailSenderFilter
+            {
+                MailAccountId = accountId,
+                EmailAddress = emailAddress,
+                FilterType = filterType,
+                IsEnabled = true,
+                LastSync = null
+            });
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
+        }
+
+        // POST: MailAccounts/RemoveGmailSender
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveGmailSender(int filterId, int accountId)
+        {
+            if (!await HasAccessToAccountAsync(accountId))
+                return Json(new { success = false, message = "Access denied" });
+
+            var filter = await _context.GmailSenderFilters
+                .FirstOrDefaultAsync(f => f.Id == filterId && f.MailAccountId == accountId);
+
+            if (filter == null)
+                return Json(new { success = false, message = "Filter not found" });
+
+            _context.GmailSenderFilters.Remove(filter);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
+        }
+
+        // POST: MailAccounts/ToggleGmailSender
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ToggleGmailSender(int filterId, int accountId)
+        {
+            if (!await HasAccessToAccountAsync(accountId))
+                return Json(new { success = false, message = "Access denied" });
+
+            var filter = await _context.GmailSenderFilters
+                .FirstOrDefaultAsync(f => f.Id == filterId && f.MailAccountId == accountId);
+
+            if (filter == null)
+                return Json(new { success = false, message = "Filter not found" });
+
+            filter.IsEnabled = !filter.IsEnabled;
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, isEnabled = filter.IsEnabled });
         }
 
         // GET: MailAccounts/Delete/5
@@ -810,63 +896,30 @@ var model = new MailAccountViewModel
                 var jobId = await _syncJobService.StartSyncAsync(id, account.Name);
                 if (!string.IsNullOrEmpty(jobId))
                 {
-                    // Actually perform the sync based on provider type
-                    if (account.Provider == ProviderType.M365)
+                    // Dispatch sync via provider factory — handles all provider types
+                    _ = Task.Run(async () =>
                     {
-                        // For M365 accounts, use GraphEmailService
-                        _ = Task.Run(async () =>
+                        try
                         {
-                            try
+                            using var scope = _serviceScopeFactory.CreateScope();
+                            var factory = scope.ServiceProvider.GetRequiredService<MailArchiver.Services.Factories.ProviderEmailServiceFactory>();
+                            var dbContext = scope.ServiceProvider.GetRequiredService<MailArchiverDbContext>();
+
+                            var freshAccount = await dbContext.MailAccounts
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(a => a.Id == account.Id);
+                            if (freshAccount != null)
                             {
-                                // Create a new service scope for the background task to avoid disposed context issues
-                                using var scope = _serviceScopeFactory.CreateScope();
-                                var graphEmailService = scope.ServiceProvider.GetRequiredService<IGraphEmailService>();
-                                var dbContext = scope.ServiceProvider.GetRequiredService<MailArchiverDbContext>();
-                                
-                                // Get a fresh untracked copy of the account from the new context to avoid tracking conflicts
-                                var freshAccount = await dbContext.MailAccounts
-                                    .AsNoTracking()
-                                    .FirstOrDefaultAsync(a => a.Id == account.Id);
-                                if (freshAccount != null)
-                                {
-                                    await graphEmailService.SyncMailAccountAsync(freshAccount, jobId);
-                                }
+                                var provider = factory.GetService(freshAccount.Provider);
+                                await provider.SyncMailAccountAsync(freshAccount, jobId);
                             }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Error during M365 sync for account {AccountName}: {Message}", account.Name, ex.Message);
-                                _syncJobService.CompleteJob(jobId, false, ex.Message);
-                            }
-                        });
-                    }
-                    else
-                    {
-                        // For IMAP accounts, use EmailService
-                        _ = Task.Run(async () =>
+                        }
+                        catch (Exception ex)
                         {
-                            try
-                            {
-                                // Create a new service scope for the background task to avoid disposed context issues
-                                using var scope = _serviceScopeFactory.CreateScope();
-                                var imapService = scope.ServiceProvider.GetRequiredService<MailArchiver.Services.Providers.ImapEmailService>();
-                                var dbContext = scope.ServiceProvider.GetRequiredService<MailArchiverDbContext>();
-                                
-                                // Get a fresh untracked copy of the account from the new context to avoid tracking conflicts
-                                var freshAccount = await dbContext.MailAccounts
-                                    .AsNoTracking()
-                                    .FirstOrDefaultAsync(a => a.Id == account.Id);
-                                if (freshAccount != null)
-                                {
-                                    await imapService.SyncMailAccountAsync(freshAccount, jobId);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Error during IMAP sync for account {AccountName}: {Message}", account.Name, ex.Message);
-                                _syncJobService.CompleteJob(jobId, false, ex.Message);
-                            }
-                        });
-                    }
+                            _logger.LogError(ex, "Error during sync for account {AccountName}: {Message}", account.Name, ex.Message);
+                            _syncJobService.CompleteJob(jobId, false, ex.Message);
+                        }
+                    });
                     
                     // Log the sync action
                     var authService = HttpContext.RequestServices.GetService<MailArchiver.Services.IAuthenticationService>();

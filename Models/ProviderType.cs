@@ -4,6 +4,7 @@ namespace MailArchiver.Models
     {
         IMAP,
         M365, // Microsoft 365
-        IMPORT
+        IMPORT,
+        Gmail
     }
 }
