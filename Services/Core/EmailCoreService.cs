@@ -191,7 +191,7 @@ namespace MailArchiver.Services.Core
                 // Match emails where this account is the primary owner OR has a junction-table association.
                 // Use schema-qualified table name so this WHERE clause works in both the count query
                 // (no alias) and the data query (alias e, joined with MailAccounts which also has "Id").
-                whereConditions.Add($@"(""MailAccountId"" = @param{paramCounter} OR mail_archiver.""ArchivedEmails"".""Id"" IN (
+                whereConditions.Add($@"(""MailAccountId"" = @param{paramCounter} OR e.""Id"" IN (
                     SELECT ""ArchivedEmailId"" FROM mail_archiver.""ArchivedEmailAccounts""
                     WHERE ""MailAccountId"" = @param{paramCounter}))");
                 parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", accountId.Value));
@@ -201,7 +201,7 @@ namespace MailArchiver.Services.Core
             {
                 if (allowedAccountIds.Any())
                 {
-                    whereConditions.Add($@"(""MailAccountId"" = ANY(@param{paramCounter}) OR mail_archiver.""ArchivedEmails"".""Id"" IN (
+                    whereConditions.Add($@"(""MailAccountId"" = ANY(@param{paramCounter}) OR e.""Id"" IN (
                         SELECT ""ArchivedEmailId"" FROM mail_archiver.""ArchivedEmailAccounts""
                         WHERE ""MailAccountId"" = ANY(@param{paramCounter})))");
                     parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", allowedAccountIds.ToArray()));
@@ -247,10 +247,10 @@ namespace MailArchiver.Services.Core
 
             var whereClause = whereConditions.Any() ? "WHERE " + string.Join(" AND ", whereConditions) : "";
 
-            // Count query
+            // Count query — uses same alias "e" as the data query so WHERE conditions referencing e."Id" work in both
             var countSql = $@"
                 SELECT COUNT(*)
-                FROM mail_archiver.""ArchivedEmails""
+                FROM mail_archiver.""ArchivedEmails"" e
                 {whereClause}";
 
             var totalCount = await ExecuteScalarQueryAsync<int>(countSql, CloneParameters(parameters));
