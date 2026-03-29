@@ -59,6 +59,9 @@ namespace MailArchiver.Models.ViewModels
 
         [Display(Name = "Token Store Name")]
         public string? GmailTokenStoreName { get; set; }
+
+        [Display(Name = "Download All Mail")]
+        public bool GmailDownloadAll { get; set; }
         
         [Display(Name = "Delete After Days")]
         [Range(1, int.MaxValue, ErrorMessage = "Delete after days must be at least 1")]

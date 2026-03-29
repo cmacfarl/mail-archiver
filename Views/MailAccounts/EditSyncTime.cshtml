@@ -20,7 +20,7 @@
                 
                 <div class="mb-3">
                     <label asp-for="NewSyncTime" class="form-label">@Localizer["NewSyncTime"]</label>
-                    <input asp-for="NewSyncTime" class="form-control" type="datetime-local" value="@Model.NewSyncTime.ToString("yyyy-MM-ddTHH:mm")" />
+                    <input asp-for="NewSyncTime" class="form-control" type="datetime-local" value="@DateTime.SpecifyKind(Model.NewSyncTime, DateTimeKind.Utc).ToLocalTime().ToString("yyyy-MM-ddTHH:mm")" />
                     <span asp-validation-for="NewSyncTime" class="text-danger"></span>
                     <div class="form-text">
                         @Localizer["EditSyncTimeNote"]
@@ -32,7 +32,7 @@
                     <div class="form-control-plaintext">
                         @if (Model.CurrentSyncTime.Year > 1970)
                         {
-                            <span class="utc-timestamp" data-utc-time="@Model.CurrentSyncTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")">
+                            <span class="utc-timestamp" data-utc-time="@Model.CurrentSyncTime.ToString("yyyy-MM-ddTHH:mm:ss")">
                                 @Model.CurrentSyncTime.ToString("g")
                             </span>
                         }

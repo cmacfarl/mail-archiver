@@ -12,6 +12,7 @@ namespace MailArchiver.Data
         public DbSet<UserMailAccount> UserMailAccounts { get; set; }
         public DbSet<AccessLog> AccessLogs { get; set; }
         public DbSet<GmailSenderFilter> GmailSenderFilters { get; set; }
+        public DbSet<ArchivedEmailAccount> ArchivedEmailAccounts { get; set; }
 
         public MailArchiverDbContext(DbContextOptions<MailArchiverDbContext> options)
             : base(options)
@@ -180,6 +181,24 @@ namespace MailArchiver.Data
                 .IsUnique()
                 .HasDatabaseName("IX_GmailSenderFilters_AccountId_Email_Type");
                 
+            // ArchivedEmailAccount (junction table) configuration
+            modelBuilder.Entity<ArchivedEmailAccount>()
+                .HasIndex(a => new { a.ArchivedEmailId, a.MailAccountId })
+                .IsUnique()
+                .HasDatabaseName("IX_ArchivedEmailAccounts_EmailId_AccountId");
+
+            modelBuilder.Entity<ArchivedEmailAccount>()
+                .HasOne(a => a.ArchivedEmail)
+                .WithMany(e => e.ArchivedEmailAccounts)
+                .HasForeignKey(a => a.ArchivedEmailId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ArchivedEmailAccount>()
+                .HasOne(a => a.MailAccount)
+                .WithMany()
+                .HasForeignKey(a => a.MailAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             // AccessLog entity configuration
             modelBuilder.Entity<AccessLog>()
                 .Property(a => a.Username)

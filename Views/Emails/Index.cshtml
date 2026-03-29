@@ -334,7 +334,7 @@
                                     </td>
                                     <td>@email.From</td>
                                     <td>@email.To</td>
-                                    <td>@email.SentDate.ToString("g")</td>
+                                    <td><span class="utc-timestamp" data-utc-time="@email.SentDate.ToString("yyyy-MM-ddTHH:mm:ss")">@email.SentDate.ToString("g")</span></td>
                                     <td>@email.MailAccount.Name</td>
                                     <td>
                                         @if (email.HasAttachments)
@@ -391,7 +391,7 @@
                             <div class="email-card-meta">
                                 <div><strong>@Localizer["From"]:</strong> @email.From</div>
                                 <div><strong>@Localizer["To"]:</strong> @(email.To.Length > 50 ? email.To.Substring(0, 50) + "..." : email.To)</div>
-                                <div><strong>@Localizer["Date"]:</strong> @email.SentDate.ToString("g")</div>
+                                <div><strong>@Localizer["Date"]:</strong> <span class="utc-timestamp" data-utc-time="@email.SentDate.ToString("yyyy-MM-ddTHH:mm:ss")">@email.SentDate.ToString("g")</span></div>
                                 <div><strong>@Localizer["Account"]:</strong> @email.MailAccount.Name</div>
                             </div>
                             <div class="email-card-actions">

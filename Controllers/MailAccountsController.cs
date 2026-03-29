@@ -224,6 +224,7 @@ var model = new MailAccountViewModel
                     TenantId = model.Provider == ProviderType.M365 ? model.TenantId : null,
                     GmailCredentialsFile = model.Provider == ProviderType.Gmail ? model.GmailCredentialsFile : null,
                     GmailTokenStoreName = model.Provider == ProviderType.Gmail ? model.GmailTokenStoreName : null,
+                    GmailDownloadAll = model.Provider == ProviderType.Gmail && model.GmailDownloadAll,
                     ExcludedFolders = string.Empty,
                     DeleteAfterDays = model.DeleteAfterDays,
                     LocalRetentionDays = model.LocalRetentionDays,
@@ -352,6 +353,7 @@ var model = new MailAccountViewModel
                 TenantId = account.TenantId,
                 GmailCredentialsFile = account.GmailCredentialsFile,
                 GmailTokenStoreName = account.GmailTokenStoreName,
+                GmailDownloadAll = account.GmailDownloadAll,
                 GmailSenderFilters = senderFilters
             };
 
@@ -463,6 +465,7 @@ var model = new MailAccountViewModel
                     // Gmail fields
                     account.GmailCredentialsFile = model.Provider == ProviderType.Gmail ? model.GmailCredentialsFile : null;
                     account.GmailTokenStoreName = model.Provider == ProviderType.Gmail ? model.GmailTokenStoreName : null;
+                    account.GmailDownloadAll = model.Provider == ProviderType.Gmail && model.GmailDownloadAll;
 
                     // Only update password if provided
                     if (!string.IsNullOrEmpty(model.Password))
@@ -896,6 +899,10 @@ var model = new MailAccountViewModel
                 var jobId = await _syncJobService.StartSyncAsync(id, account.Name);
                 if (!string.IsNullOrEmpty(jobId))
                 {
+                    // Register a CancellationTokenSource so the UI cancel button can stop the sync
+                    var cts = new CancellationTokenSource();
+                    _syncJobService.UpdateJobProgress(jobId, job => job.CancellationTokenSource = cts);
+
                     // Dispatch sync via provider factory — handles all provider types
                     _ = Task.Run(async () =>
                     {
@@ -914,10 +921,19 @@ var model = new MailAccountViewModel
                                 await provider.SyncMailAccountAsync(freshAccount, jobId);
                             }
                         }
+                        catch (OperationCanceledException)
+                        {
+                            _logger.LogInformation("Sync for account {AccountName} was cancelled", account.Name);
+                            _syncJobService.CompleteJob(jobId, false, "Cancelled by user");
+                        }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "Error during sync for account {AccountName}: {Message}", account.Name, ex.Message);
                             _syncJobService.CompleteJob(jobId, false, ex.Message);
+                        }
+                        finally
+                        {
+                            cts.Dispose();
                         }
                     });
                     

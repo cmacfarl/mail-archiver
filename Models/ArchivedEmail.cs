@@ -37,5 +37,6 @@ namespace MailArchiver.Models
 
         public virtual MailAccount MailAccount { get; set; }
         public virtual ICollection<EmailAttachment> Attachments { get; set; } = new List<EmailAttachment>();
+        public virtual ICollection<ArchivedEmailAccount> ArchivedEmailAccounts { get; set; } = new List<ArchivedEmailAccount>();
     }
 }

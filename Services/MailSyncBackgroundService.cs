@@ -108,7 +108,7 @@ namespace MailArchiver.Services
                             }
                             else
                             {
-                                _logger.LogInformation("Using IMAP for account: {AccountName}", account.Name);
+                                _logger.LogInformation("Using {Provider} for account: {AccountName}", account.Provider, account.Name);
                                 var provider = await providerFactory.GetServiceForAccountAsync(account.Id);
                                 await provider.SyncMailAccountAsync(account, jobId);
                             }

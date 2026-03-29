@@ -125,7 +125,11 @@
                         <div class="form-text">Name for the OAuth2 token store directory. Defaults to <code>gmail_token_{email}</code> if left blank. Each account should use a unique name.</div>
                         <span asp-validation-for="GmailTokenStoreName" class="text-danger"></span>
                     </div>
-                    <p class="text-muted">Sender filters can be added after the account is created.</p>
+                    <div class="mb-3 form-check">
+                        <input asp-for="GmailDownloadAll" class="form-check-input" />
+                        <label asp-for="GmailDownloadAll" class="form-check-label">Download All Mail</label>
+                        <div class="form-text">When checked, all mail is archived regardless of sender/recipient filters. Sender filters can be added after the account is created.</div>
+                    </div>
                 </div>
 
                 <div id="emailDeletionSettings">

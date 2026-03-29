@@ -89,6 +89,9 @@ namespace MailArchiver.Migrations
                     b.Property<string>("GmailTokenStoreName")
                         .HasColumnType("text");
 
+                    b.Property<bool>("GmailDownloadAll")
+                        .HasColumnType("boolean");
+
                     b.HasKey("Id");
 
                     b.ToTable("MailAccounts", "mail_archiver");

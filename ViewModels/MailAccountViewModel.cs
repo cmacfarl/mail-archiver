@@ -69,6 +69,9 @@ namespace MailArchiver.Models.ViewModels
         [Display(Name = "Token Store Name")]
         public string? GmailTokenStoreName { get; set; }
 
+        [Display(Name = "Download All Mail")]
+        public bool GmailDownloadAll { get; set; }
+
         // Gmail sender filters — populated in Edit GET, not bound on POST (managed via separate actions)
         public List<GmailSenderFilter> GmailSenderFilters { get; set; } = new();
 

@@ -35,6 +35,7 @@ public class MailAccount
     // Gmail OAuth2 fields
     public string? GmailCredentialsFile { get; set; }
     public string? GmailTokenStoreName { get; set; }
+    public bool GmailDownloadAll { get; set; } = false;
 
     [NotMapped]
     public List<string> ExcludedFoldersList

@@ -188,7 +188,12 @@ namespace MailArchiver.Services.Core
                     return (new List<ArchivedEmail>(), 0);
                 }
 
-                whereConditions.Add($@"""MailAccountId"" = @param{paramCounter}");
+                // Match emails where this account is the primary owner OR has a junction-table association.
+                // Use schema-qualified table name so this WHERE clause works in both the count query
+                // (no alias) and the data query (alias e, joined with MailAccounts which also has "Id").
+                whereConditions.Add($@"(""MailAccountId"" = @param{paramCounter} OR mail_archiver.""ArchivedEmails"".""Id"" IN (
+                    SELECT ""ArchivedEmailId"" FROM mail_archiver.""ArchivedEmailAccounts""
+                    WHERE ""MailAccountId"" = @param{paramCounter}))");
                 parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", accountId.Value));
                 paramCounter++;
             }
@@ -196,7 +201,9 @@ namespace MailArchiver.Services.Core
             {
                 if (allowedAccountIds.Any())
                 {
-                    whereConditions.Add($@"""MailAccountId"" = ANY(@param{paramCounter})");
+                    whereConditions.Add($@"(""MailAccountId"" = ANY(@param{paramCounter}) OR mail_archiver.""ArchivedEmails"".""Id"" IN (
+                        SELECT ""ArchivedEmailId"" FROM mail_archiver.""ArchivedEmailAccounts""
+                        WHERE ""MailAccountId"" = ANY(@param{paramCounter})))");
                     parameters.Add(new Npgsql.NpgsqlParameter($"@param{paramCounter}", allowedAccountIds.ToArray()));
                     paramCounter++;
                 }
@@ -1033,23 +1040,43 @@ namespace MailArchiver.Services.Core
             var messageId = message.MessageId ??
                 $"{message.From}-{message.To}-{message.Subject}-{emailDate.Ticks}";
 
+            // Check globally across all accounts — one stored copy, many account associations
             var existingEmail = await _context.ArchivedEmails
-                .FirstOrDefaultAsync(e => e.MessageId == messageId && e.MailAccountId == account.Id);
+                .FirstOrDefaultAsync(e => e.MessageId == messageId);
 
             if (existingEmail != null)
             {
-                // E-Mail existiert bereits, prüfen ob der Ordner geändert wurde
-                var cleanFolderName = CleanText(folderName ?? string.Empty);
-                if (existingEmail.FolderName != cleanFolderName)
+                if (existingEmail.MailAccountId == account.Id)
                 {
-                    // Ordner hat sich geändert, aktualisieren
-                    var oldFolder = existingEmail.FolderName;
-                    existingEmail.FolderName = cleanFolderName;
-                    await _context.SaveChangesAsync();
-                    _logger.LogInformation("Updated folder for existing email: {Subject} from '{OldFolder}' to '{NewFolder}'",
-                        existingEmail.Subject, oldFolder, cleanFolderName);
+                    // Same primary account — update folder if it has changed
+                    var cleanFolderName = CleanText(folderName ?? string.Empty);
+                    if (existingEmail.FolderName != cleanFolderName)
+                    {
+                        var oldFolder = existingEmail.FolderName;
+                        existingEmail.FolderName = cleanFolderName;
+                        await _context.SaveChangesAsync();
+                        _logger.LogInformation("Updated folder for existing email: {Subject} from '{OldFolder}' to '{NewFolder}'",
+                            existingEmail.Subject, oldFolder, cleanFolderName);
+                    }
                 }
-                return false; // E-Mail existiert bereits
+                else
+                {
+                    // Email owned by a different account — associate current account if not already done
+                    var alreadyAssociated = await _context.ArchivedEmailAccounts
+                        .AnyAsync(a => a.ArchivedEmailId == existingEmail.Id && a.MailAccountId == account.Id);
+                    if (!alreadyAssociated)
+                    {
+                        _context.ArchivedEmailAccounts.Add(new ArchivedEmailAccount
+                        {
+                            ArchivedEmailId = existingEmail.Id,
+                            MailAccountId = account.Id
+                        });
+                        await _context.SaveChangesAsync();
+                        _logger.LogDebug("Associated email {MessageId} ({Subject}) with additional account {AccountName}",
+                            messageId, existingEmail.Subject, account.Name);
+                    }
+                }
+                return false;
             }
 
             try
@@ -1283,6 +1310,14 @@ namespace MailArchiver.Services.Core
                 try
                 {
                     _context.ArchivedEmails.Add(archivedEmail);
+                    await _context.SaveChangesAsync();
+
+                    // Create primary account association in junction table
+                    _context.ArchivedEmailAccounts.Add(new ArchivedEmailAccount
+                    {
+                        ArchivedEmailId = archivedEmail.Id,
+                        MailAccountId = account.Id
+                    });
                     await _context.SaveChangesAsync();
 
                     // Attachments are already saved via EF relationship (cascade)

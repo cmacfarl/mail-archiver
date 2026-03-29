@@ -153,7 +153,7 @@
                     <strong class="text-muted small">@Localizer["Date"]:</strong>
                 </div>
                 <div class="col-12 col-md-10">
-                    @Model.Email.SentDate.ToString(System.Globalization.CultureInfo.CurrentUICulture.DateTimeFormat.ShortDatePattern + " " + System.Globalization.CultureInfo.CurrentUICulture.DateTimeFormat.ShortTimePattern)
+                    <span class="utc-timestamp" data-utc-time="@Model.Email.SentDate.ToString("yyyy-MM-ddTHH:mm:ss")">@Model.Email.SentDate.ToString(System.Globalization.CultureInfo.CurrentUICulture.DateTimeFormat.ShortDatePattern + " " + System.Globalization.CultureInfo.CurrentUICulture.DateTimeFormat.ShortTimePattern)</span>
                 </div>
             </div>
 

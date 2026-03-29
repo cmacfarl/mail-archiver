@@ -116,8 +116,14 @@
                         <div class="form-text">Name for the OAuth2 token store directory. Defaults to <code>gmail_token_{email}</code> if left blank. Each account should use a unique name.</div>
                         <span asp-validation-for="GmailTokenStoreName" class="text-danger"></span>
                     </div>
+                    <div class="mb-3 form-check">
+                        <input asp-for="GmailDownloadAll" class="form-check-input" id="gmailDownloadAll" />
+                        <label asp-for="GmailDownloadAll" class="form-check-label">Download All Mail</label>
+                        <div class="form-text">When checked, all mail is archived regardless of sender/recipient filters. Filters below are ignored.</div>
+                    </div>
 
-                    <h4 class="mt-4">Sender Filters</h4>
+                    <div id="gmailFilterSection">
+                    <h4 class="mt-4">Sender / Recipient Filters</h4>
                     <p class="text-muted">Only email from these senders will be archived. Each sender tracks its own sync timestamp independently.</p>
 
                     @if (Model.GmailSenderFilters.Any())
@@ -188,6 +194,7 @@
                         </button>
                     </div>
                     <div id="senderError" class="text-danger mt-1" style="display:none;"></div>
+                    </div><!-- /gmailFilterSection -->
                 </div>
 
                 <div id="emailDeletionSettings" style="display: none;">
@@ -422,9 +429,24 @@
                 });
             }
             
+            // Toggle gmailFilterSection based on GmailDownloadAll checkbox
+            const gmailDownloadAllCheckbox = document.getElementById('gmailDownloadAll');
+            const gmailFilterSection = document.getElementById('gmailFilterSection');
+
+            function toggleGmailFilterSection() {
+                if (gmailFilterSection) {
+                    gmailFilterSection.style.display = gmailDownloadAllCheckbox.checked ? 'none' : 'block';
+                }
+            }
+
+            if (gmailDownloadAllCheckbox) {
+                gmailDownloadAllCheckbox.addEventListener('change', toggleGmailFilterSection);
+            }
+
             // Initial check
             toggleSettings();
-            
+            toggleGmailFilterSection();
+
             // Add event listeners
             providerSelect.addEventListener('change', toggleSettings);
             
