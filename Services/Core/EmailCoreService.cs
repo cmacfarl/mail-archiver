@@ -258,12 +258,16 @@ namespace MailArchiver.Services.Core
             // Build ORDER BY clause
             var orderByClause = GetOrderByClause(sortBy, sortOrder);
 
-            // Data query
+            // Data query — includes AllAccountNames subquery for multi-account highlighting
             var dataSql = $@"
                 SELECT e.""Id"", e.""MailAccountId"", e.""MessageId"", e.""Subject"", e.""Body"", e.""HtmlBody"",
                        e.""From"", e.""To"", e.""Cc"", e.""Bcc"", e.""SentDate"", e.""ReceivedDate"",
                        e.""IsOutgoing"", e.""HasAttachments"", e.""FolderName"", e.""IsLocked"",
-                       ma.""Id"" as ""AccountId"", ma.""Name"" as ""AccountName"", ma.""EmailAddress"" as ""AccountEmail""
+                       ma.""Id"" as ""AccountId"", ma.""Name"" as ""AccountName"", ma.""EmailAddress"" as ""AccountEmail"",
+                       (SELECT string_agg(ma2.""Name"", ', ' ORDER BY ma2.""Name"")
+                        FROM mail_archiver.""ArchivedEmailAccounts"" aea2
+                        INNER JOIN mail_archiver.""MailAccounts"" ma2 ON aea2.""MailAccountId"" = ma2.""Id""
+                        WHERE aea2.""ArchivedEmailId"" = e.""Id"") AS ""AllAccountNames""
                 FROM mail_archiver.""ArchivedEmails"" e
                 INNER JOIN mail_archiver.""MailAccounts"" ma ON e.""MailAccountId"" = ma.""Id""
                 {whereClause}
@@ -329,7 +333,8 @@ namespace MailArchiver.Services.Core
                         Id = reader.GetInt32(reader.GetOrdinal("AccountId")),
                         Name = reader.IsDBNull(reader.GetOrdinal("AccountName")) ? "" : reader.GetString(reader.GetOrdinal("AccountName")),
                         EmailAddress = reader.IsDBNull(reader.GetOrdinal("AccountEmail")) ? "" : reader.GetString(reader.GetOrdinal("AccountEmail"))
-                    }
+                    },
+                    AllAccountNames = reader.IsDBNull(reader.GetOrdinal("AllAccountNames")) ? "" : reader.GetString(reader.GetOrdinal("AllAccountNames"))
                 };
                 emails.Add(email);
             }

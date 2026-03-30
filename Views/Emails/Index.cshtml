@@ -45,11 +45,19 @@
                         <label asp-for="SearchTerm" class="form-label">@Localizer["SearchTerm"]</label>
                         <input asp-for="SearchTerm" class="form-control form-control-sm" placeholder="@Localizer["SubjectSender"]" />
                         <div class="form-text small text-muted">
-                            <i class="bi bi-info-circle me-1"></i>
-                            <strong>@Localizer["AdvancedSearch"]</strong><br>
-                            @Localizer["AdvancedSearchInfo1"]<br>
-                            @Localizer["AdvancedSearchInfo2"]<br>
-                            @Localizer["AdvancedSearchInfo3"]
+                            <button type="button" class="btn btn-link btn-sm p-0 text-muted text-decoration-none"
+                                    data-bs-toggle="collapse" data-bs-target="#searchHelpText" aria-expanded="false">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>@Localizer["AdvancedSearch"]</strong>
+                                <i class="bi bi-chevron-down ms-1 search-help-chevron" style="transition: transform 0.2s;"></i>
+                            </button>
+                            <div class="collapse" id="searchHelpText">
+                                <div class="mt-1">
+                                    @Localizer["AdvancedSearchInfo1"]<br>
+                                    @Localizer["AdvancedSearchInfo2"]<br>
+                                    @Localizer["AdvancedSearchInfo3"]
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="col-6 col-md-3 col-lg-2 mb-3">
@@ -216,7 +224,7 @@
             <!-- Desktop Tabelle -->
             <div class="card-body p-0 d-none d-lg-block">
                 <div class="table-responsive">
-                    <table class="table table-hover table-striped mb-0">
+                    <table class="table table-hover table-striped mb-0" id="emailsTable">
                         <thead class="table-dark">
                             <tr>
                                 @if (Model.ShowSelectionControls)
@@ -305,16 +313,17 @@
                                 </th>
                                 <th>@Localizer["Account"]</th>
                                 <th>@Localizer["Attachments"]</th>
-                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var email in Model.SearchResults)
                             {
-                                <tr>
+                                var detailsUrl = Url.Action("Details", new { id = email.Id, returnUrl = Context.Request.GetDisplayUrl() });
+                                var isMultiAccount = !string.IsNullOrEmpty(email.AllAccountNames) && email.AllAccountNames.Contains(',');
+                                <tr class="email-row" data-href="@detailsUrl" style="cursor: pointer;">
                                     @if (Model.ShowSelectionControls)
                                     {
-                                        <td>
+                                        <td onclick="event.stopPropagation()">
                                             <div class="form-check">
                                                 <input class="form-check-input email-select-checkbox" type="checkbox"
                                                        name="ids" value="@email.Id">
@@ -335,18 +344,25 @@
                                     <td>@email.From</td>
                                     <td>@email.To</td>
                                     <td><span class="utc-timestamp" data-utc-time="@email.SentDate.ToString("yyyy-MM-ddTHH:mm:ss")">@email.SentDate.ToString("g")</span></td>
-                                    <td>@email.MailAccount.Name</td>
+                                    <td>
+                                        @if (isMultiAccount)
+                                        {
+                                            <span class="text-primary fw-semibold" title="@email.AllAccountNames"
+                                                  data-bs-toggle="tooltip" data-bs-placement="left"
+                                                  data-bs-title="@email.AllAccountNames">
+                                                <i class="bi bi-people-fill me-1"></i>@email.MailAccount.Name
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            @email.MailAccount.Name
+                                        }
+                                    </td>
                                     <td>
                                         @if (email.HasAttachments)
                                         {
                                             <i class="bi bi-paperclip text-warning"></i>
                                         }
-                                    </td>
-                                    <td>
-                                        <a asp-action="Details" 
-                                        asp-route-id="@email.Id" 
-                                        asp-route-returnUrl="@Context.Request.GetDisplayUrl()" 
-                                        class="btn btn-sm btn-outline-primary">@Localizer["Details"]</a>
                                     </td>
                                 </tr>
                             }
@@ -359,10 +375,12 @@
             <div class="d-lg-none p-3">
                 @foreach (var email in Model.SearchResults)
                 {
-                    <div class="card mb-3 email-card-mobile">
+                    var mobileDetailsUrl = Url.Action("Details", new { id = email.Id, returnUrl = Context.Request.GetDisplayUrl() });
+                    var mobileIsMultiAccount = !string.IsNullOrEmpty(email.AllAccountNames) && email.AllAccountNames.Contains(',');
+                    <div class="card mb-3 email-card-mobile" style="cursor: pointer;" onclick="window.location.href='@mobileDetailsUrl'">
                         @if (Model.ShowSelectionControls)
                         {
-                            <div class="form-check">
+                            <div class="form-check" onclick="event.stopPropagation()">
                                 <input class="form-check-input email-select-checkbox" type="checkbox"
                                        name="ids" value="@email.Id" id="email-mobile-@email.Id">
                                 <label class="form-check-label" for="email-mobile-@email.Id">
@@ -392,15 +410,19 @@
                                 <div><strong>@Localizer["From"]:</strong> @email.From</div>
                                 <div><strong>@Localizer["To"]:</strong> @(email.To.Length > 50 ? email.To.Substring(0, 50) + "..." : email.To)</div>
                                 <div><strong>@Localizer["Date"]:</strong> <span class="utc-timestamp" data-utc-time="@email.SentDate.ToString("yyyy-MM-ddTHH:mm:ss")">@email.SentDate.ToString("g")</span></div>
-                                <div><strong>@Localizer["Account"]:</strong> @email.MailAccount.Name</div>
-                            </div>
-                            <div class="email-card-actions">
-                                <a asp-action="Details" 
-                                asp-route-id="@email.Id" 
-                                asp-route-returnUrl="@Context.Request.GetDisplayUrl()" 
-                                class="btn btn-outline-primary btn-sm w-100">
-                                    <i class="bi bi-eye"></i> @Localizer["Details"]
-                                </a>
+                                <div>
+                                    <strong>@Localizer["Account"]:</strong>
+                                    @if (mobileIsMultiAccount)
+                                    {
+                                        <span class="text-primary fw-semibold" title="@email.AllAccountNames">
+                                            <i class="bi bi-people-fill me-1"></i>@email.MailAccount.Name
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        @email.MailAccount.Name
+                                    }
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1176,6 +1198,76 @@
                 initializeSelectionHandlers();
                 </text>
             }
+
+            // Row click → open details (skip if click was on an interactive element)
+            document.querySelectorAll('.email-row').forEach(function(row) {
+                row.addEventListener('click', function(e) {
+                    if (!e.target.closest('a, button, input, label')) {
+                        window.location.href = this.dataset.href;
+                    }
+                });
+            });
+
+            // Rotate chevron when search help is toggled
+            var searchHelpEl = document.getElementById('searchHelpText');
+            if (searchHelpEl) {
+                searchHelpEl.addEventListener('show.bs.collapse', function() {
+                    var chevron = document.querySelector('.search-help-chevron');
+                    if (chevron) chevron.style.transform = 'rotate(180deg)';
+                });
+                searchHelpEl.addEventListener('hide.bs.collapse', function() {
+                    var chevron = document.querySelector('.search-help-chevron');
+                    if (chevron) chevron.style.transform = 'rotate(0deg)';
+                });
+            }
+
+            // Initialize Bootstrap tooltips for multi-account badges
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+                new bootstrap.Tooltip(el);
+            });
+
+            // Resizable columns
+            (function() {
+                var table = document.getElementById('emailsTable');
+                if (!table) return;
+
+                var style = document.createElement('style');
+                style.textContent = [
+                    '#emailsTable th { position: relative; overflow: hidden; }',
+                    '.col-resizer { position: absolute; right: 0; top: 0; width: 6px; height: 100%;',
+                    '    cursor: col-resize; user-select: none; z-index: 1; }',
+                    '.col-resizer:hover, .col-resizer.resizing { background: rgba(255,255,255,0.3); }'
+                ].join(' ');
+                document.head.appendChild(style);
+
+                table.querySelectorAll('thead th').forEach(function(th) {
+                    var resizer = document.createElement('div');
+                    resizer.className = 'col-resizer';
+                    th.appendChild(resizer);
+
+                    var startX, startW;
+
+                    resizer.addEventListener('mousedown', function(e) {
+                        startX = e.clientX;
+                        startW = th.offsetWidth;
+                        resizer.classList.add('resizing');
+                        e.preventDefault();
+                        e.stopPropagation(); // don't trigger column sort
+
+                        function onMove(e) {
+                            th.style.width = Math.max(40, startW + e.clientX - startX) + 'px';
+                            th.style.minWidth = th.style.width;
+                        }
+                        function onUp() {
+                            resizer.classList.remove('resizing');
+                            document.removeEventListener('mousemove', onMove);
+                            document.removeEventListener('mouseup', onUp);
+                        }
+                        document.addEventListener('mousemove', onMove);
+                        document.addEventListener('mouseup', onUp);
+                    });
+                });
+            })();
         });
     </script>
 }

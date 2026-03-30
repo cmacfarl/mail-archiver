@@ -38,5 +38,12 @@ namespace MailArchiver.Models
         public virtual MailAccount MailAccount { get; set; }
         public virtual ICollection<EmailAttachment> Attachments { get; set; } = new List<EmailAttachment>();
         public virtual ICollection<ArchivedEmailAccount> ArchivedEmailAccounts { get; set; } = new List<ArchivedEmailAccount>();
+
+        /// <summary>
+        /// Comma-separated list of all account names associated with this email (primary + junction table).
+        /// Populated by the optimized search query; not stored in the database.
+        /// </summary>
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public string AllAccountNames { get; set; }
     }
 }
