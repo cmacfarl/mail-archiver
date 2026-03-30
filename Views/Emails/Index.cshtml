@@ -1252,13 +1252,6 @@
                 var table = document.getElementById('emailsTable');
                 if (!table) return;
 
-                // Snapshot natural column widths before switching to fixed layout
-                var ths = Array.from(table.querySelectorAll('thead th'));
-                ths.forEach(function(th) {
-                    th.style.width = th.offsetWidth + 'px';
-                });
-                table.style.tableLayout = 'fixed';
-
                 var style = document.createElement('style');
                 style.textContent =
                     '#emailsTable th { position: relative; overflow: hidden; white-space: nowrap; }' +
@@ -1268,28 +1261,82 @@
                     '.col-resizer:hover, .col-resizer.resizing { background: rgba(255,255,255,0.3); }';
                 document.head.appendChild(style);
 
-                ths.forEach(function(th) {
+                var ths = Array.from(table.querySelectorAll('thead th'));
+                // Key includes column count so selection-mode (extra checkbox column) doesn't
+                // bleed into normal-mode saved widths.
+                var STORAGE_KEY = 'emailColWidths_' + ths.length;
+
+                function applyWidths(widths) {
+                    // Give every column except the last an explicit px width.
+                    // The last column is left unsized so it fills whatever remains,
+                    // keeping the table at exactly width:100% with no overflow.
+                    ths.forEach(function(th, i) {
+                        if (i < ths.length - 1) th.style.width = widths[i] + 'px';
+                    });
+                }
+
+                function saveWidths() {
+                    try {
+                        localStorage.setItem(STORAGE_KEY,
+                            JSON.stringify(ths.map(function(th) { return th.offsetWidth; })));
+                    } catch(e) {}
+                }
+
+                // Measure natural widths before touching anything
+                var naturalWidths = ths.map(function(th) { return th.offsetWidth; });
+
+                // Restore saved widths if available and the column count matches
+                var initWidths = naturalWidths;
+                try {
+                    var saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+                    if (Array.isArray(saved) && saved.length === ths.length) initWidths = saved;
+                } catch(e) {}
+
+                table.style.tableLayout = 'fixed';
+                applyWidths(initWidths);
+
+                // Add a resizer handle to every column except the last.
+                // Dragging grows this column and shrinks the next one by the same amount,
+                // so the total table width never changes.
+                ths.slice(0, -1).forEach(function(th, i) {
+                    var nextTh = ths[i + 1];
                     var resizer = document.createElement('div');
                     resizer.className = 'col-resizer';
                     th.appendChild(resizer);
 
-                    var startX, startW;
+                    // Block click from reaching the <th> sort onclick handler
+                    resizer.addEventListener('click', function(e) { e.stopPropagation(); });
 
                     resizer.addEventListener('mousedown', function(e) {
-                        startX = e.clientX;
-                        startW = th.offsetWidth;
+                        var startX    = e.clientX;
+                        var startW    = th.offsetWidth;
+                        var startNextW = nextTh.offsetWidth;
                         resizer.classList.add('resizing');
                         e.preventDefault();
                         e.stopPropagation();
 
                         function onMove(e) {
-                            th.style.width = Math.max(40, startW + e.clientX - startX) + 'px';
+                            var diff  = e.clientX - startX;
+                            var newW  = startW + diff;
+                            var newNextW = startNextW - diff;
+
+                            // Clamp both sides to a minimum of 40px
+                            if (newW < 40)      { newNextW += newW - 40;      newW = 40; }
+                            if (newNextW < 40)  { newW     += newNextW - 40;  newNextW = 40; }
+
+                            th.style.width = newW + 'px';
+                            // Only set width explicitly if nextTh is not the last column;
+                            // the last column fills the remainder automatically.
+                            if (i + 1 < ths.length - 1) nextTh.style.width = newNextW + 'px';
                         }
+
                         function onUp() {
                             resizer.classList.remove('resizing');
                             document.removeEventListener('mousemove', onMove);
                             document.removeEventListener('mouseup', onUp);
+                            saveWidths();
                         }
+
                         document.addEventListener('mousemove', onMove);
                         document.addEventListener('mouseup', onUp);
                     });
