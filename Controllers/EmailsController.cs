@@ -2051,6 +2051,35 @@ namespace MailArchiver.Controllers
             }
         }
 
+        [HttpGet]
+        public async Task<JsonResult> SearchSuggestions(string q, string field)
+        {
+            if (string.IsNullOrWhiteSpace(q) && string.IsNullOrWhiteSpace(field))
+                return Json(new List<string>());
+
+            // Resolve allowed accounts the same way Index does
+            List<int> allowedAccountIds = null;
+            var authService = HttpContext.RequestServices.GetService<MailArchiver.Services.IAuthenticationService>();
+            var userService = HttpContext.RequestServices.GetService<IUserService>();
+            if (authService != null && userService != null && !authService.IsCurrentUserAdmin(HttpContext))
+            {
+                var username = authService.GetCurrentUserDisplayName(HttpContext);
+                var user = await userService.GetUserByUsernameAsync(username);
+                if (user != null)
+                {
+                    var accounts = await userService.GetUserMailAccountsAsync(user.Id);
+                    allowedAccountIds = accounts.Select(a => a.Id).ToList();
+                }
+                else
+                {
+                    allowedAccountIds = new List<int>();
+                }
+            }
+
+            var suggestions = await _emailCoreService.GetSearchSuggestionsAsync(q ?? "", field ?? "", allowedAccountIds);
+            return Json(suggestions);
+        }
+
         // POST: Emails/ExportSearchResults
         [HttpPost]
         [ValidateAntiForgeryToken]

@@ -602,6 +602,89 @@ namespace MailArchiver.Services.Core
 
         #endregion
 
+        #region Search Suggestions
+
+        public async Task<List<string>> GetSearchSuggestionsAsync(
+            string query, string field, List<int> allowedAccountIds)
+        {
+            if (string.IsNullOrWhiteSpace(query) && string.IsNullOrWhiteSpace(field))
+                return new List<string>();
+
+            var prefix = (query ?? "") + "%";
+            var ids = allowedAccountIds?.ToArray();
+
+            // Account access sub-condition reused across all queries
+            const string accountFilter = @"
+                (e.""MailAccountId"" = ANY(@ids) OR e.""Id"" IN (
+                    SELECT ""ArchivedEmailId"" FROM mail_archiver.""ArchivedEmailAccounts""
+                    WHERE ""MailAccountId"" = ANY(@ids)))";
+
+            string sql;
+            switch ((field ?? "").ToLowerInvariant())
+            {
+                case "from":
+                    sql = $@"SELECT DISTINCT e.""From""
+                             FROM mail_archiver.""ArchivedEmails"" e
+                             WHERE {(ids != null ? accountFilter : "TRUE")}
+                               AND e.""From"" ILIKE @prefix
+                             ORDER BY e.""From""
+                             LIMIT 10";
+                    break;
+                case "to":
+                    sql = $@"SELECT DISTINCT e.""To""
+                             FROM mail_archiver.""ArchivedEmails"" e
+                             WHERE {(ids != null ? accountFilter : "TRUE")}
+                               AND e.""To"" ILIKE @prefix
+                             ORDER BY e.""To""
+                             LIMIT 10";
+                    break;
+                case "subject":
+                    sql = $@"SELECT DISTINCT LEFT(e.""Subject"", 80)
+                             FROM mail_archiver.""ArchivedEmails"" e
+                             WHERE {(ids != null ? accountFilter : "TRUE")}
+                               AND e.""Subject"" ILIKE @prefix
+                             ORDER BY 1
+                             LIMIT 10";
+                    break;
+                default:
+                    // Free-text: return matching senders and recipients (UNION deduplicates)
+                    sql = $@"SELECT val FROM (
+                                 SELECT DISTINCT e.""From"" AS val
+                                 FROM mail_archiver.""ArchivedEmails"" e
+                                 WHERE {(ids != null ? accountFilter : "TRUE")}
+                                   AND e.""From"" ILIKE @prefix
+                                 UNION
+                                 SELECT DISTINCT e.""To"" AS val
+                                 FROM mail_archiver.""ArchivedEmails"" e
+                                 WHERE {(ids != null ? accountFilter : "TRUE")}
+                                   AND e.""To"" ILIKE @prefix
+                             ) sub
+                             ORDER BY val
+                             LIMIT 10";
+                    break;
+            }
+
+            var results = new List<string>();
+            using var conn = new Npgsql.NpgsqlConnection(_context.Database.GetConnectionString());
+            await conn.OpenAsync();
+
+            using var cmd = new Npgsql.NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("prefix", prefix);
+            if (ids != null)
+                cmd.Parameters.Add(new Npgsql.NpgsqlParameter("ids", ids));
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var val = reader.IsDBNull(0) ? null : reader.GetString(0);
+                if (!string.IsNullOrWhiteSpace(val))
+                    results.Add(val.Trim());
+            }
+            return results;
+        }
+
+        #endregion
+
         #region Email Count
 
         public async Task<int> GetEmailCountByAccountAsync(int accountId)
