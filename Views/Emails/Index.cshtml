@@ -330,7 +330,7 @@
                                             </div>
                                         </td>
                                     }
-                                    <td>
+                                    <td title="@email.Subject">
                                         @if (email.IsOutgoing)
                                         {
                                             <span class="badge bg-info">@Localizer["Out"]</span>
@@ -341,13 +341,13 @@
                                         }
                                         @email.Subject
                                     </td>
-                                    <td>@email.From</td>
-                                    <td>@email.To</td>
-                                    <td><span class="utc-timestamp" data-utc-time="@email.SentDate.ToString("yyyy-MM-ddTHH:mm:ss")">@email.SentDate.ToString("g")</span></td>
-                                    <td>
+                                    <td title="@email.From">@email.From</td>
+                                    <td title="@email.To">@email.To</td>
+                                    <td><span class="utc-timestamp email-date" data-utc-time="@email.SentDate.ToString("yyyy-MM-ddTHH:mm:ss")">@email.SentDate.ToString("g")</span></td>
+                                    <td title="@(isMultiAccount ? email.AllAccountNames : email.MailAccount.Name)">
                                         @if (isMultiAccount)
                                         {
-                                            <span class="text-primary fw-semibold" title="@email.AllAccountNames"
+                                            <span class="text-primary fw-semibold"
                                                   data-bs-toggle="tooltip" data-bs-placement="left"
                                                   data-bs-title="@email.AllAccountNames">
                                                 <i class="bi bi-people-fill me-1"></i>@email.MailAccount.Name
@@ -1226,21 +1226,49 @@
                 new bootstrap.Tooltip(el);
             });
 
-            // Resizable columns
+            // Smart date format: time only for today, Month Day for older
+            (function() {
+                document.querySelectorAll('.email-date').forEach(function(el) {
+                    var utcStr = el.getAttribute('data-utc-time');
+                    if (!utcStr) return;
+                    var d = new Date(utcStr + 'Z');
+                    var now = new Date();
+                    var isToday = d.getFullYear() === now.getFullYear()
+                               && d.getMonth() === now.getMonth()
+                               && d.getDate() === now.getDate();
+                    el.textContent = isToday
+                        ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                        : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    // Full timestamp on hover
+                    el.closest('td').title = d.toLocaleString([], {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                        hour: 'numeric', minute: '2-digit'
+                    });
+                });
+            })();
+
+            // Resizable columns + table-layout: fixed for single-line ellipsis
             (function() {
                 var table = document.getElementById('emailsTable');
                 if (!table) return;
 
+                // Snapshot natural column widths before switching to fixed layout
+                var ths = Array.from(table.querySelectorAll('thead th'));
+                ths.forEach(function(th) {
+                    th.style.width = th.offsetWidth + 'px';
+                });
+                table.style.tableLayout = 'fixed';
+
                 var style = document.createElement('style');
-                style.textContent = [
-                    '#emailsTable th { position: relative; overflow: hidden; }',
-                    '.col-resizer { position: absolute; right: 0; top: 0; width: 6px; height: 100%;',
-                    '    cursor: col-resize; user-select: none; z-index: 1; }',
-                    '.col-resizer:hover, .col-resizer.resizing { background: rgba(255,255,255,0.3); }'
-                ].join(' ');
+                style.textContent =
+                    '#emailsTable th { position: relative; overflow: hidden; white-space: nowrap; }' +
+                    '#emailsTable td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }' +
+                    '.col-resizer { position: absolute; right: 0; top: 0; width: 6px; height: 100%;' +
+                    '    cursor: col-resize; user-select: none; z-index: 1; }' +
+                    '.col-resizer:hover, .col-resizer.resizing { background: rgba(255,255,255,0.3); }';
                 document.head.appendChild(style);
 
-                table.querySelectorAll('thead th').forEach(function(th) {
+                ths.forEach(function(th) {
                     var resizer = document.createElement('div');
                     resizer.className = 'col-resizer';
                     th.appendChild(resizer);
@@ -1252,11 +1280,10 @@
                         startW = th.offsetWidth;
                         resizer.classList.add('resizing');
                         e.preventDefault();
-                        e.stopPropagation(); // don't trigger column sort
+                        e.stopPropagation();
 
                         function onMove(e) {
                             th.style.width = Math.max(40, startW + e.clientX - startX) + 'px';
-                            th.style.minWidth = th.style.width;
                         }
                         function onUp() {
                             resizer.classList.remove('resizing');
